@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>수퍼마리오 게임</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+        }
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+        }
+        #startScreen, #gameOverScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-family: 'Arial', sans-serif;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        #startScreen h1, #gameOverScreen h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        #startScreen p, #gameOverScreen p {
+            font-size: 24px;
+        }
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-family: 'Arial', sans-serif;
+            font-size: 24px;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="startScreen">
+        <h1>수퍼마리오 게임</h1>
+        <p>스페이스바를 눌러 시작하세요</p>
+    </div>
+    <div id="gameOverScreen" style="display: none;">
+        <h1>게임 오버</h1>
+        <p>스페이스바를 눌러 다시 시작하세요</p>
+    </div>
+    <div id="score">점수: 0</div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const scoreElement = document.getElementById('score');
+
+        canvas.width = 800;
+        canvas.height = 600;
+
+        let gameStarted = false;
+        let gameOver = false;
+        let score = 0;
+
+        // 음향 효과 추가
+        const jumpSound = new Audio('/api/placeholder/audio');
+        const coinSound = new Audio('/api/placeholder/audio');
+        const gameOverSound = new Audio('/api/placeholder/audio');
+
+        let mario = {
+            x: 50,
+            y: canvas.height - 100,
+            width: 50,
+            height: 50,
+            speed: 5,
+            jumpStrength: 15,
+            velocityY: 0,
+            jumping: false
+        };
+
+        let camera = {
+            x: 0,
+            y: 0
+        };
+
+        let platforms = [
+            {x: 0, y: canvas.height - 40, width: 1000, height: 40},
+            {x: 300, y: canvas.height - 120, width: 100, height: 20},
+            {x: 500, y: canvas.height - 200, width: 100, height: 20},
+            {x: 700, y: canvas.height - 280, width: 100, height: 20},
+            {x: 900, y: canvas.height - 360, width: 100, height: 20},
+            {x: 1100, y: canvas.height - 280, width: 100, height: 20},
+            {x: 1300, y: canvas.height - 200, width: 100, height: 20},
+            {x: 1500, y: canvas.height - 120, width: 100, height: 20},
+            {x: 1700, y: canvas.height - 200, width: 100, height: 20},
+            {x: 1900, y: canvas.height - 280, width: 100, height: 20}
+        ];
+
+        let enemies = [
+            {x: 400, y: canvas.height - 80, width: 40, height: 40, speed: 2, direction: 1},
+            {x: 800, y: canvas.height - 320, width: 40, height: 40, speed: 2, direction: 1},
+            {x: 1200, y: canvas.height - 80, width: 40, height: 40, speed: 2, direction: 1},
+            {x: 1600, y: canvas.height - 160, width: 40, height: 40, speed: 2, direction: 1}
+        ];
+
+        let coins = [
+            {x: 350, y: canvas.height - 150, width: 20, height: 20},
+            {x: 550, y: canvas.height - 230, width: 20, height: 20},
+            {x: 750, y: canvas.height - 310, width: 20, height: 20},
+            {x: 950, y: canvas.height - 390, width: 20, height: 20},
+            {x: 1150, y: canvas.height - 310, width: 20, height: 20},
+            {x: 1350, y: canvas.height - 230, width: 20, height: 20},
+            {x: 1550, y: canvas.height - 150, width: 20, height: 20},
+            {x: 1750, y: canvas.height - 230, width: 20, height: 20},
+            {x: 1950, y: canvas.height - 310, width: 20, height: 20}
+        ];
+
+        let clouds = [
+            {x: 100, y: 50, width: 100, height: 60},
+            {x: 500, y: 100, width: 120, height: 70},
+            {x: 900, y: 80, width: 110, height: 65},
+            {x: 1300, y: 70, width: 130, height: 75},
+            {x: 1700, y: 90, width: 115, height: 68}
+        ];
+
+        let mushrooms = [
+            {x: 250, y: canvas.height - 80, width: 40, height: 40},
+            {x: 650, y: canvas.height - 80, width: 40, height: 40},
+            {x: 1050, y: canvas.height - 80, width: 40, height: 40},
+            {x: 1450, y: canvas.height - 80, width: 40, height: 40},
+            {x: 1850, y: canvas.height - 80, width: 40, height: 40}
+        ];
+
+        let keys = {};
+
+        function drawBackground() {
+            // 하늘
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 구름
+            ctx.fillStyle = 'white';
+            clouds.forEach(cloud => {
+                ctx.beginPath();
+                ctx.ellipse(cloud.x - camera.x, cloud.y, cloud.width / 2, cloud.height / 2, 0, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // 잔디
+            ctx.fillStyle = '#90EE90';
+            ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
+        }
+
+        function drawMario() {
+            ctx.fillStyle = 'red';
+            ctx.fillRect(mario.x - camera.x, mario.y, mario.width, mario.height);
+        }
+
+        function drawPlatforms() {
+            ctx.fillStyle = '#8B4513';  // 갈색
+            platforms.forEach(platform => {
+                ctx.fillRect(platform.x - camera.x, platform.y, platform.width, platform.height);
+            });
+        }
+
+        function drawEnemies() {
+            ctx.fillStyle = 'purple';
+            enemies.forEach(enemy => {
+                ctx.fillRect(enemy.x - camera.x, enemy.y, enemy.width, enemy.height);
+            });
+        }
+
+        function drawCoins() {
+            ctx.fillStyle = 'gold';
+            coins.forEach(coin => {
+                ctx.beginPath();
+                ctx.arc(coin.x - camera.x + coin.width/2, coin.y + coin.height/2, coin.width/2, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function drawMushrooms() {
+            mushrooms.forEach(mushroom => {
+                // 버섯 갓
+                ctx.fillStyle = 'red';
+                ctx.beginPath();
+                ctx.arc(mushroom.x - camera.x + mushroom.width / 2, mushroom.y + mushroom.height / 3, mushroom.width / 2, 0, Math.PI, true);
+                ctx.fill();
+
+                // 버섯 대
+                ctx.fillStyle = 'white';
+                ctx.fillRect(mushroom.x - camera.x + mushroom.width / 4, mushroom.y + mushroom.height / 3, mushroom.width / 2, mushroom.height * 2 / 3);
+            });
+        }
+
+        function updateMario() {
+            if (keys['a'] && mario.x > 0) mario.x -= mario.speed;
+            if (keys['d']) mario.x += mario.speed;
+
+            if (keys['w'] && !mario.jumping) {
+                mario.jumping = true;
+                mario.velocityY = -mario.jumpStrength;
+                jumpSound.play();
+            }
+
+            mario.velocityY += 0.8; // 중력
+            mario.y += mario.velocityY;
+
+            // 플랫폼 충돌 체크
+            platforms.forEach(platform => {
+                if (mario.x < platform.x + platform.width &&
+                    mario.x + mario.width > platform.x &&
+                    mario.y + mario.height > platform.y &&
+                    mario.y + mario.height < platform.y + platform.height + mario.velocityY) {
+                    mario.y = platform.y - mario.height;
+                    mario.jumping = false;
+                    mario.velocityY = 0;
+                }
+            });
+
+            // 카메라 업데이트
+            camera.x = mario.x - canvas.width / 2;
+            if (camera.x < 0) camera.x = 0;
+            if (camera.x > 2000 - canvas.width) camera.x = 2000 - canvas.width;
+        }
+
+        function updateEnemies() {
+            enemies.forEach(enemy => {
+                enemy.x += enemy.speed * enemy.direction;
+                
+                // 플랫폼 끝에서 방향 전환
+                let onPlatform = false;
+                platforms.forEach(platform => {
+                    if (enemy.x >= platform.x && enemy.x + enemy.width <= platform.x + platform.width &&
+                        enemy.y + enemy.height === platform.y) {
+                        onPlatform = true;
+                        if (enemy.x <= platform.x || enemy.x + enemy.width >= platform.x + platform.width) {
+                            enemy.direction *= -1;
+                        }
+                    }
+                });
+                if (!onPlatform) enemy.direction *= -1;
+
+                // 마리오와 적 충돌 체크
+                if (mario.x < enemy.x + enemy.width &&
+                    mario.x + mario.width > enemy.x &&
+                    mario.y < enemy.y + enemy.height &&
+                    mario.y + mario.height > enemy.y) {
+                    gameOver = true;
+                    gameOverSound.play();
+                }
+            });
+        }
+
+        function checkCoinCollision() {
+            coins = coins.filter(coin => {
+                if (mario.x < coin.x + coin.width &&
+                    mario.x + mario.width > coin.x &&
+                    mario.y < coin.y + coin.height &&
+                    mario.y + mario.height > coin.y) {
+                    score += 10;
+                    scoreElement.textContent = `점수: ${score}`;
+                    coinSound.play();
+                    return false;
+                }
+                return true;
+            });
+        }
+
+        function updateGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (!gameOver) {
+                updateMario();
+                updateEnemies();
+                checkCoinCollision();
+
+                drawBackground();
+                drawPlatforms();
+                drawMario();
+                drawEnemies();
+                drawCoins();
+                drawMushrooms();
+
+                requestAnimationFrame(updateGame);
+            } else {
+                gameOverScreen.style.display = 'block';
+            }
+        }
+
+        function startGame() {
+            gameStarted = true;
+            gameOver = false;
+            score = 0;
+            scoreElement.textContent = `점수: ${score}`;
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            mario = {
+                x: 50,
+                y: canvas.height - 100,
+                width: 50,
+                height: 50,
+                speed: 5,
+                jumpStrength: 15,
+                velocityY: 0,
+                jumping: false
+            };
+            camera = {x: 0, y: 0};
+            updateGame();
+        }
+
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            if (e.code === 'Space') {
+                if (!gameStarted || gameOver) {
+                    startGame();
+                }
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // 초기 화면 그리기
+        drawBackground();
+    </script>
+</body>
+</html>
